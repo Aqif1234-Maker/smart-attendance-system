@@ -1,3 +1,4 @@
+import hashlib
 from config import get_connection
 
 def add_student(name, roll_number, class_name, section, contact):
@@ -259,3 +260,68 @@ def get_recent_attendance_by_section(class_name, section):
         conn.close()
         return result
     return []
+
+def create_teachers_table():
+    conn = get_connection()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS teachers (
+                id         INT AUTO_INCREMENT PRIMARY KEY,
+                full_name  VARCHAR(100) NOT NULL,
+                email      VARCHAR(100) NOT NULL UNIQUE,
+                password   VARCHAR(255) NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+    except Exception as e:
+        print(f"Error creating teachers table: {e}")
+    finally:
+        conn.close()
+
+
+def register_teacher(full_name, email, password):
+    conn = get_connection()
+    if not conn:
+        return "error"
+    try:
+        cursor = conn.cursor()
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        cursor.execute(
+            "INSERT INTO teachers (full_name, email, password) VALUES (%s, %s, %s)",
+            (full_name, email.lower(), hashed_password)
+        )
+        conn.commit()
+        return "success"
+    except Exception as e:
+        if "1062" in str(e) or "Duplicate" in str(e):
+            return "exists"
+        print(f"Error registering teacher: {e}")
+        return "error"
+    finally:
+        conn.close()
+
+
+def login_teacher(email, password):
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        cursor.execute(
+            "SELECT id, full_name, email FROM teachers WHERE email=%s AND password=%s",
+            (email.lower(), hashed_password)
+        )
+        row = cursor.fetchone()
+        if row:
+            return {"id": row[0], "full_name": row[1], "email": row[2]}
+        return None
+    except Exception as e:
+        print(f"Error during login: {e}")
+        return None
+    finally:
+        conn.close()
